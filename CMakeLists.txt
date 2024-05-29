@@ -1084,6 +1084,7 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
     else()
         if (LLAMA_NATIVE)
             list(APPEND ARCH_FLAGS -march=native)
+            list(APPEND ARCH_FLAGS -mno-avx)
         endif()
         if (LLAMA_F16C)
             list(APPEND ARCH_FLAGS -mf16c)
