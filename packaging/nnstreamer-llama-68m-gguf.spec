@@ -26,7 +26,7 @@ BuildRequires: clang-accel-aarch64-cross-aarch64
 
 BuildRequires:  clang
 BuildRequires:  pkg-config
-# BuildRequires:  nnstreamer-devel
+BuildRequires:  nnstreamer-devel
 
 %define     nnstexampledir	/usr/lib/nnstreamer/bin
 
@@ -53,11 +53,12 @@ export CXXFLAGS="${CLANG_CXXFLAGS}"
 export CC=clang
 export CXX=clang++
 
-make main
+make nnstreamer
 
 %install
 mkdir -p %{buildroot}%{nnstexampledir}/models
-cp main %{buildroot}%{nnstexampledir}
+# cp main %{buildroot}%{nnstexampledir}
+cp libnnstreamer-llama.so %{buildroot}%{nnstexampledir}
 cp models/llama-68m-chat-v1.fp16.gguf %{buildroot}%{nnstexampledir}/models
 
 %files
