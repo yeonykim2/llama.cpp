@@ -29,6 +29,9 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
     int32_t n_predict = 128;
     std::string model     = "models/llama-68m-chat-v1.fp16.gguf";
 
+    std::string s_prompt = "<|im_start|>system You are a helpful assistant.<|im_end|> <|im_start|>user Please, summarize the sutitle.\n";
+    std::string e_prompt = "<|im_end|>";
+
     bool input_echo           = true;
     bool display              = true;
     // bool need_to_save_session = !path_session.empty() && n_matching_session_tokens < embd_inp.size();
@@ -141,8 +144,8 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
   int getInputDim (GstTensorsInfo *info)
   {
     info->num_tensors = 1;
-    info->info[0].type = _NNS_FLOAT32;
-    info->info[0].dimension[0] = 256;
+    info->info[0].type = _NNS_UINT8;
+    info->info[0].dimension[0] = 48000;
     info->info[0].dimension[1] = 1;
     info->info[0].dimension[2] = 1;
     for (int i = 3; i < NNS_TENSOR_RANK_LIMIT; i++)
@@ -154,8 +157,8 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
   int getOutputDim (GstTensorsInfo *info)
   {
     info->num_tensors = 1;
-    info->info[0].type = _NNS_FLOAT32;
-    info->info[0].dimension[0] = 256;
+    info->info[0].type = _NNS_UINT8;
+    info->info[0].dimension[0] = 48000;
     info->info[0].dimension[1] = 1;
     info->info[0].dimension[2] = 1;
     info->info[0].dimension[3] = 1;
@@ -177,11 +180,11 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
 
   int invoke (const GstTensorMemory *in, GstTensorMemory *out)
   {
-    LOG_TEE("data ??? : \"%s\"\n", (char*)in->data);
-    params.prompt = (char*)in->data;
+    params.prompt = lparams.s_prompt + (char*)in->data + lparams.e_prompt;
+    
     embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
-    LOG_TEE("prompt: \"%s\"\n", log_tostr(params.prompt));
-    LOG_TEE("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+    LOG_TEE("prompt: *******\n \"%s\"\n ******* \n", log_tostr(params.prompt));
+    // LOG_TEE("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
@@ -238,7 +241,7 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
                   n_eval = params.n_batch;
               }
 
-              LOG_TEE("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd).c_str());
+              LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd).c_str());
 
               if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, lparams.n_past, 0))) {
                   LOG_TEE("%s : failed to eval\n", __func__);
@@ -247,7 +250,7 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
 
               lparams.n_past += n_eval;
 
-              LOG_TEE("n_past = %d\n", lparams.n_past);
+              LOG("n_past = %d\n", lparams.n_past);
               // Display total tokens alongside total time
               if (params.n_print > 0 && lparams.n_past % params.n_print == 0) {
                   LOG_TEE("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", lparams.n_past, n_ctx);
@@ -263,7 +266,7 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
 
         llama_sampling_accept(ctx_sampling, ctx, id, /* apply_grammar= */ true);
 
-        LOG_TEE("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());
+        LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());
 
         embd.push_back(id);
 
@@ -273,7 +276,7 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
         // decrement remaining sampling budget
         --lparams.n_remain;
 
-        LOG_TEE("n_remain: %d\n", lparams.n_remain);
+        LOG("n_remain: %d\n", lparams.n_remain);
       } else {
           // some user input remains from prompt or interaction, forward it to processing
           LOG_TEE("embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), lparams.n_consumed);
@@ -323,7 +326,7 @@ class nnstreamer_llama_filter : public tensor_filter_cpp
       if ((int) embd_inp.size() <= lparams.n_consumed) {
           // deal with end of generation tokens in interactive mode
           if (llama_token_is_eog(model, llama_sampling_last(ctx_sampling))) {
-              LOG_TEE("found an EOG token\n");
+              LOG_TEE("\nfound an EOG token\n");
           }
       }
 
