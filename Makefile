@@ -1,6 +1,6 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
-	main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
+	main nnstreamer quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama beam-search  \
 	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm tests/test-c.o
 
@@ -308,8 +308,8 @@ ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
-	MK_CFLAGS     += -march=native -mtune=native
-	HOST_CXXFLAGS += -march=native -mtune=native
+	MK_CFLAGS     += -march=native -mtune=native -mno-avx
+	HOST_CXXFLAGS += -march=native -mtune=native -mno-avx
 
 	# Usage AVX-only
 	#MK_CFLAGS   += -mfma -mf16c -mavx
@@ -335,8 +335,8 @@ ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
 	# Nvidia Jetson
-	MK_CFLAGS   += -mcpu=native
-	MK_CXXFLAGS += -mcpu=native
+	# MK_CFLAGS   += -mcpu=native
+	# MK_CXXFLAGS += -mcpu=native
 	JETSON_RELEASE_INFO = $(shell jetson_release)
 	ifdef JETSON_RELEASE_INFO
 		ifneq ($(filter TX2%,$(JETSON_RELEASE_INFO)),)
@@ -748,6 +748,7 @@ libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
 clean:
 	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult lookup-create lookup-merge lookup-stats common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 	rm -vrf ggml-cuda/*.o
+	rm -vrf libnnstreamer-llama.so
 	find examples pocs -type f -name "*.o" -delete
 
 #
@@ -767,6 +768,9 @@ main: examples/main/main.cpp                                  ggml.o llama.o $(C
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
+nnstreamer: examples/nnstreamer-cpp-filter/nnstreamer_llama_class.cpp       ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
+	$(CXX) $(CXXFLAGS) `pkg-config --cflags --libs nnstreamer-cpp` -shared -Wl,-soname,libnnstreamer-llama.so ggml.o llama.o $(COMMON_DEPS) console.o $(OBJS) examples/nnstreamer-cpp-filter/nnstreamer_llama_class.cpp -o libnnstreamer-llama.so $(LDFLAGS) `pkg-config --cflags --libs nnstreamer-cpp`
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
